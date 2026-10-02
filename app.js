@@ -1,11 +1,26 @@
-"use strict";
+import { Cite } from "https://esm.sh/@citation-js/core@0.9.0";
+import "https://esm.sh/@citation-js/plugin-bibtex@0.9.0";
+import "https://esm.sh/@citation-js/plugin-csl@0.9.0";
 
 const $ = (id) => document.getElementById(id);
 
-// Accepts "10.x/y", "doi:10.x/y", or any URL containing a DOI.
+// Accepts a DOI ("10.x/y", "doi:...", doi.org URL) or an arXiv ID/URL
+// (2507.10823, arXiv:2507.10823v2, arxiv.org/abs|pdf/..., hep-th/9901001).
+// arXiv papers resolve through their DataCite DOI (10.48550/arXiv.<id>).
+const ARXIV_ID = "(?:\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[A-Z]{2})?/\\d{7})";
+const ARXIV_RE = new RegExp(
+  "^(?:(?:https?://)?(?:www\\.)?arxiv\\.org/(?:abs|pdf|html)/|arxiv:)?(" +
+    ARXIV_ID +
+    ")(?:v\\d+)?(?:\\.pdf)?/?(?:[?#].*)?$",
+  "i",
+);
+
 function parseDoi(line) {
-  const m = decodeURIComponent(line.trim()).match(/10\.\d{4,9}\/[^\s"<>]+/i);
-  return m ? m[0].replace(/[.,;)\]]+$/, "") : null;
+  line = line.trim();
+  const m = decodeURIComponent(line).match(/10\.\d{4,9}\/[^\s"<>]+/i);
+  if (m) return m[0].replace(/[.,;)\]]+$/, "");
+  const a = line.match(ARXIV_RE);
+  return a ? "10.48550/arXiv." + a[1] : null;
 }
 
 async function fetchBibtex(doi) {
@@ -22,42 +37,31 @@ async function fetchBibtex(doi) {
 }
 
 const strip = (s) =>
-  s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^A-Za-z0-9]/g, "");
-const STOP = new Set([
-  "a",
-  "an",
-  "the",
-  "on",
-  "of",
-  "in",
-  "and",
-  "for",
-  "to",
-  "with",
-]);
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]/g, "");
+const STOP = new Set(["a", "an", "the", "on", "of", "in", "and", "for", "to", "with"]);
 
-// Rewrites the citation key to e.g. smith2013first, mirroring doi2bib's readable keys.
-function rekey(bib) {
-  const field = (name) => {
-    const m = bib.match(
-      new RegExp("\\b" + name + '\\s*=\\s*[{"]+([^}"]*)', "i"),
-    );
-    return m ? m[1].trim() : "";
-  };
-  const author = field("author").split(/\s+and\s+/)[0];
-  const family = author.includes(",")
-    ? author.split(",")[0]
-    : author.split(/\s+/).pop();
-  const word =
-    field("title")
-      .split(/\s+/)
-      .map(strip)
-      .find((w) => w && !STOP.has(w.toLowerCase())) || "";
-  const key = (strip(family) + field("year") + word).toLowerCase();
-  return key ? bib.replace(/^(@\w+\s*\{)[^,]*,/, "$1" + key + ",") : bib;
+// Readable key like kucsko2013nanometrescale, built from parsed CSL-JSON.
+function makeKey(item) {
+  const a = (item.author || [])[0] || {};
+  const year = item.issued?.["date-parts"]?.[0]?.[0] ?? "";
+  const word = (item.title || "")
+    .split(/\s+/)
+    .map(strip)
+    .find((w) => w && !STOP.has(w.toLowerCase())) || "";
+  return (strip(a.family || a.literal || "") + year + word).toLowerCase();
+}
+
+let cite = null; // current parsed entry
+
+function render() {
+  if (!cite) return;
+  const mode = $("mode").value;
+  $("style").hidden = mode !== "citation";
+  $("output").value =
+    mode === "bibtex"
+      ? cite.format("bibtex")
+      : cite.format("bibliography", { format: "text", template: $("style").value }).trim();
+  $("output").hidden = $("actions").hidden = false;
 }
 
 $("form").addEventListener("submit", async (ev) => {
@@ -65,6 +69,7 @@ $("form").addEventListener("submit", async (ev) => {
   const status = $("status");
   const line = $("input").value.trim();
   status.textContent = "";
+  cite = null;
   $("output").hidden = $("actions").hidden = true;
   if (!line) return;
 
@@ -77,12 +82,15 @@ $("form").addEventListener("submit", async (ev) => {
   $("go").disabled = true;
   status.textContent = "Fetching…";
   try {
-    let bib = await fetchBibtex(doi);
-    if ($("shortkey").checked) bib = rekey(bib);
-    $("output").value = bib;
-    $("output").hidden = $("actions").hidden = false;
+    cite = new Cite(await fetchBibtex(doi));
+    if ($("shortkey").checked) {
+      const key = makeKey(cite.data[0]);
+      if (key) cite.data[0].id = cite.data[0]["citation-key"] = key;
+    }
+    render();
     status.textContent = "";
   } catch (e) {
+    cite = null;
     const d = document.createElement("div");
     d.className = "err";
     d.textContent = e instanceof TypeError ? "Network error" : e.message;
@@ -90,6 +98,11 @@ $("form").addEventListener("submit", async (ev) => {
   } finally {
     $("go").disabled = false;
   }
+});
+
+for (const id of ["mode", "style"]) $(id).addEventListener("change", render);
+$("shortkey").addEventListener("change", () => {
+  if ($("input").value.trim()) $("form").requestSubmit();
 });
 
 $("copy").addEventListener("click", async () => {
@@ -103,7 +116,7 @@ $("download").addEventListener("click", () => {
   a.href = URL.createObjectURL(
     new Blob([$("output").value + "\n"], { type: "text/plain" }),
   );
-  a.download = "references.bib";
+  a.download = $("mode").value === "bibtex" ? "references.bib" : "citation.txt";
   a.click();
   URL.revokeObjectURL(a.href);
 });
