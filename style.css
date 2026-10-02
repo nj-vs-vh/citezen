@@ -44,3 +44,14 @@ button {
 #status .err {
   color: #c0392b;
 }
+details {
+  margin-top: 1rem;
+}
+summary {
+  cursor: pointer;
+  opacity: 0.7;
+}
+details label {
+  display: block;
+  margin: 0.5rem 0;
+}

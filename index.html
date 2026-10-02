@@ -10,32 +10,29 @@
 
 <body>
   <main>
-    <h1>citezen – citation formatter</h1>
-
     <form id="form">
       <input id="input" type="text" placeholder="DOI or arXiv ID" autofocus spellcheck="false" autocomplete="off">
       <div class="row">
-        <button type="submit" id="go">Go</button>
-        <label><input type="checkbox" id="shortkey" checked> Key: author+year+word</label>
+        <button type="submit" id="fetch">Fetch</button>
+        <button type="button" id="bibtex" data-mode="bibtex" disabled>Copy BibTeX</button>
+        <button type="button" id="quote" data-mode="citation" disabled>Copy full quote</button>
       </div>
     </form>
 
     <div id="status" role="status"></div>
-    <div class="row">
-      <label>Output
-        <select id="mode"><option value="bibtex">BibTeX</option><option value="citation">Citation</option></select>
+    <textarea id="output" rows="8" readonly spellcheck="false" hidden></textarea>
+
+    <details id="settings">
+      <summary>Settings</summary>
+      <label><input type="checkbox" data-setting="shortKey"> Readable BibTeX key (author+year+word)</label>
+      <label>Citation style
+        <select data-setting="style">
+          <option value="apa">APA</option>
+          <option value="vancouver">Vancouver</option>
+          <option value="harvard1">Harvard</option>
+        </select>
       </label>
-      <select id="style" hidden>
-        <option value="apa">APA</option>
-        <option value="vancouver">Vancouver</option>
-        <option value="harvard1">Harvard</option>
-      </select>
-    </div>
-    <textarea id="output" rows="10" readonly spellcheck="false" hidden></textarea>
-    <div class="row" id="actions" hidden>
-      <button type="button" id="copy">Copy</button>
-      <button type="button" id="download">Download .bib</button>
-    </div>
+    </details>
   </main>
   <script type="module" src="app.js"></script>
 </body>

@@ -51,72 +51,111 @@ function makeKey(item) {
   return (strip(a.family || a.literal || "") + year + word).toLowerCase();
 }
 
-let cite = null; // current parsed entry
+// Settings: one JSON object in localStorage. To add a setting, add a default
+// here and a control with a matching data-setting attribute in index.html.
+const SETTINGS_KEY = "citezen.settings";
+const DEFAULTS = { shortKey: true, style: "apa" };
 
-function render() {
-  if (!cite) return;
-  const mode = $("mode").value;
-  $("style").hidden = mode !== "citation";
-  $("output").value =
-    mode === "bibtex"
-      ? cite.format("bibtex")
-      : cite.format("bibliography", { format: "text", template: $("style").value }).trim();
-  $("output").hidden = $("actions").hidden = false;
+function loadSettings() {
+  try {
+    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY)) };
+  } catch {
+    return { ...DEFAULTS };
+  }
+}
+const settings = loadSettings();
+
+for (const el of document.querySelectorAll("[data-setting]")) {
+  const name = el.dataset.setting;
+  const isCheck = el.type === "checkbox";
+  if (isCheck) el.checked = !!settings[name];
+  else el.value = settings[name];
+  el.addEventListener("change", () => {
+    settings[name] = isCheck ? el.checked : el.value;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    if (shown) show(shown); // re-render the current output with new settings
+  });
+}
+
+let cite = null; // parsed entry for lastDoi
+let lastDoi = null;
+let shown = null; // mode currently displayed
+
+function format(mode) {
+  const data = structuredClone(cite.data);
+  if (settings.shortKey) {
+    const key = makeKey(data[0]);
+    if (key) data[0].id = data[0]["citation-key"] = key;
+  }
+  const c = new Cite(data);
+  return mode === "bibtex"
+    ? c.format("bibtex").trim()
+    : c.format("bibliography", { format: "text", template: settings.style }).trim();
+}
+
+function setError(msg) {
+  const d = document.createElement("div");
+  d.className = "err";
+  d.textContent = msg;
+  $("status").replaceChildren(d);
+}
+
+async function copy(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    $("status").textContent = "Copied to clipboard";
+  } catch {
+    $("status").textContent = "Could not copy automatically; select and copy above";
+  }
+}
+
+const copyButtons = [...document.querySelectorAll("button[data-mode]")];
+
+// Copy buttons are only usable while the input still matches the fetched entry.
+function syncCopyButtons() {
+  const ready = cite && parseDoi($("input").value) === lastDoi;
+  copyButtons.forEach((b) => (b.disabled = !ready));
+}
+
+function show(mode) {
+  shown = mode;
+  $("output").value = format(mode);
+  $("output").hidden = false;
+}
+
+$("input").addEventListener("input", syncCopyButtons);
+
+for (const b of copyButtons) {
+  b.addEventListener("click", () => {
+    show(b.dataset.mode);
+    copy($("output").value);
+  });
 }
 
 $("form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const status = $("status");
   const line = $("input").value.trim();
-  status.textContent = "";
-  cite = null;
-  $("output").hidden = $("actions").hidden = true;
   if (!line) return;
 
   const doi = parseDoi(line);
   if (!doi) {
-    status.innerHTML = '<div class="err">Not a valid DOI</div>';
+    setError("Not a valid DOI or arXiv ID");
     return;
   }
 
-  $("go").disabled = true;
-  status.textContent = "Fetching…";
+  $("fetch").disabled = true;
   try {
+    $("status").textContent = "Fetching…";
     cite = new Cite(await fetchBibtex(doi));
-    if ($("shortkey").checked) {
-      const key = makeKey(cite.data[0]);
-      if (key) cite.data[0].id = cite.data[0]["citation-key"] = key;
-    }
-    render();
-    status.textContent = "";
+    lastDoi = doi;
+    show(shown ?? "bibtex");
+    $("status").textContent = "Fetched";
   } catch (e) {
-    cite = null;
-    const d = document.createElement("div");
-    d.className = "err";
-    d.textContent = e instanceof TypeError ? "Network error" : e.message;
-    status.replaceChildren(d);
+    cite = lastDoi = shown = null;
+    $("output").hidden = true;
+    setError(e instanceof TypeError ? "Network error" : e.message);
   } finally {
-    $("go").disabled = false;
+    $("fetch").disabled = false;
+    syncCopyButtons();
   }
-});
-
-for (const id of ["mode", "style"]) $(id).addEventListener("change", render);
-$("shortkey").addEventListener("change", () => {
-  if ($("input").value.trim()) $("form").requestSubmit();
-});
-
-$("copy").addEventListener("click", async () => {
-  await navigator.clipboard.writeText($("output").value);
-  $("copy").textContent = "Copied!";
-  setTimeout(() => ($("copy").textContent = "Copy"), 1200);
-});
-
-$("download").addEventListener("click", () => {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(
-    new Blob([$("output").value + "\n"], { type: "text/plain" }),
-  );
-  a.download = $("mode").value === "bibtex" ? "references.bib" : "citation.txt";
-  a.click();
-  URL.revokeObjectURL(a.href);
 });
