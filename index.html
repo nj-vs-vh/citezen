@@ -16,6 +16,7 @@
         <button type="submit" id="fetch">Fetch</button>
         <button type="button" id="bibtex" data-mode="bibtex" disabled>Copy BibTeX</button>
         <button type="button" id="quote" data-mode="citation" disabled>Copy full quote</button>
+        <button type="button" id="slides" data-mode="slides" disabled>Copy to slides</button>
       </div>
     </form>
 
@@ -25,6 +26,12 @@
     <details id="settings">
       <summary>Settings</summary>
       <label><input type="checkbox" data-setting="shortKey"> Readable BibTeX key (author+year+word)</label>
+      <label>Your name (highlighted in slide citations)
+        <input type="text" data-setting="userName" placeholder="Kucsko, G." autocomplete="off" spellcheck="false">
+      </label>
+      <label>Slide citation prefix
+        <input type="text" data-setting="slidesEmoji" size="4" autocomplete="off">
+      </label>
       <label>Citation style
         <select data-setting="style">
           <option value="apa">APA</option>

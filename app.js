@@ -1,6 +1,7 @@
 import { Cite } from "https://esm.sh/@citation-js/core@0.9.0";
 import "https://esm.sh/@citation-js/plugin-bibtex@0.9.0";
 import "https://esm.sh/@citation-js/plugin-csl@0.9.0";
+import { formatSlides } from "./slides.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -36,6 +37,19 @@ async function fetchBibtex(doi) {
   return text;
 }
 
+// doi.org's BibTeX drops collaboration names; CSL-JSON keeps them. Best effort.
+async function fetchCsl(doi) {
+  try {
+    const res = await fetch("https://doi.org/" + encodeURI(doi), {
+      headers: { Accept: "application/vnd.citationstyles.csl+json" },
+      redirect: "follow",
+    });
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
 const strip = (s) =>
   s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]/g, "");
 const STOP = new Set(["a", "an", "the", "on", "of", "in", "and", "for", "to", "with"]);
@@ -54,7 +68,7 @@ function makeKey(item) {
 // Settings: one JSON object in localStorage. To add a setting, add a default
 // here and a control with a matching data-setting attribute in index.html.
 const SETTINGS_KEY = "citezen.settings";
-const DEFAULTS = { shortKey: true, style: "apa" };
+const DEFAULTS = { shortKey: true, style: "apa", userName: "", slidesEmoji: "📖" };
 
 function loadSettings() {
   try {
@@ -70,7 +84,7 @@ for (const el of document.querySelectorAll("[data-setting]")) {
   const isCheck = el.type === "checkbox";
   if (isCheck) el.checked = !!settings[name];
   else el.value = settings[name];
-  el.addEventListener("change", () => {
+  el.addEventListener("input", () => {
     settings[name] = isCheck ? el.checked : el.value;
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     if (shown) show(shown); // re-render the current output with new settings
@@ -78,10 +92,17 @@ for (const el of document.querySelectorAll("[data-setting]")) {
 }
 
 let cite = null; // parsed entry for lastDoi
+let csl = null; // CSL-JSON for lastDoi (may be null)
 let lastDoi = null;
 let shown = null; // mode currently displayed
 
 function format(mode) {
+  if (mode === "slides") {
+    return formatSlides(csl ?? cite.data[0], {
+      userName: settings.userName,
+      emoji: settings.slidesEmoji,
+    });
+  }
   const data = structuredClone(cite.data);
   if (settings.shortKey) {
     const key = makeKey(data[0]);
@@ -146,12 +167,14 @@ $("form").addEventListener("submit", async (ev) => {
   $("fetch").disabled = true;
   try {
     $("status").textContent = "Fetching…";
-    cite = new Cite(await fetchBibtex(doi));
+    const [bib, cslItem] = await Promise.all([fetchBibtex(doi), fetchCsl(doi)]);
+    cite = new Cite(bib);
+    csl = cslItem;
     lastDoi = doi;
     show(shown ?? "bibtex");
     $("status").textContent = "Fetched";
   } catch (e) {
-    cite = lastDoi = shown = null;
+    cite = csl = lastDoi = shown = null;
     $("output").hidden = true;
     setError(e instanceof TypeError ? "Network error" : e.message);
   } finally {

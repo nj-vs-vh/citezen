@@ -19,7 +19,7 @@ h1 {
   margin-top: 0;
   opacity: 0.7;
 }
-textarea, input[type=text] {
+textarea, #input {
   width: 100%;
   box-sizing: border-box;
   font:
@@ -54,4 +54,9 @@ summary {
 details label {
   display: block;
   margin: 0.5rem 0;
+}
+details input[type=text] {
+  font: inherit;
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.4rem;
 }
