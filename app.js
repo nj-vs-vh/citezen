@@ -54,6 +54,10 @@ const strip = (s) =>
   s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]/g, "");
 const STOP = new Set(["a", "an", "the", "on", "of", "in", "and", "for", "to", "with"]);
 
+function capitalize(val) {
+    return String(val).charAt(0).toUpperCase() + String(val).slice(1);
+}
+
 // Readable key like kucsko2013nanometrescale, built from parsed CSL-JSON.
 function makeKey(item) {
   const a = (item.author || [])[0] || {};
@@ -62,7 +66,7 @@ function makeKey(item) {
     .split(/\s+/)
     .map(strip)
     .find((w) => w && !STOP.has(w.toLowerCase())) || "";
-  return (strip(a.family || a.literal || "") + year + word).toLowerCase();
+  return capitalize(strip(a.family || a.literal || "")) + year + capitalize(word);
 }
 
 // Settings: one JSON object in localStorage. To add a setting, add a default
