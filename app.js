@@ -1,6 +1,6 @@
-import { Cite } from "https://esm.sh/@citation-js/core@0.9.0";
-import "https://esm.sh/@citation-js/plugin-bibtex@0.9.0";
-import "https://esm.sh/@citation-js/plugin-csl@0.9.0";
+import { Cite } from "@citation-js/core";
+import "@citation-js/plugin-bibtex";
+import "@citation-js/plugin-csl";
 import { formatSlides } from "./slides.js";
 
 const $ = (id) => document.getElementById(id);

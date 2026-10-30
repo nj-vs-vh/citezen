@@ -1,0 +1,16 @@
+{
+  "name": "citezen",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild app.js --bundle --minify --format=esm --outfile=dist/app.js && cp index.html style.css dist/"
+  },
+  "dependencies": {
+    "@citation-js/core": "0.9.0",
+    "@citation-js/plugin-bibtex": "0.9.0",
+    "@citation-js/plugin-csl": "0.9.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
